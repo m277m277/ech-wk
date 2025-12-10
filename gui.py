@@ -82,7 +82,7 @@ except ImportError:
     print("安装命令: pip3 install PyQt5")
     sys.exit(1)
 
-APP_VERSION = "1.3"
+APP_VERSION = "1.4"
 APP_TITLE = f"ECH Workers 客户端 v{APP_VERSION}"
 
 # 中国IP列表URL
@@ -862,18 +862,29 @@ class MainWindow(QMainWindow):
     def get_control_values(self):
         """获取界面输入值"""
         server = self.config_manager.get_current_server()
-        if server:
-            server = server.copy()
-            server['server'] = self.server_edit.text()
-            server['listen'] = self.listen_edit.text()
-            server['token'] = self.token_edit.text()
-            server['ip'] = self.ip_edit.text()
-            server['dns'] = self.dns_edit.text()
-            server['ech'] = self.ech_edit.text()
-            # 保存分流模式
-            routing_mode = self.routing_combo.currentData()
-            if routing_mode:
-                server['routing_mode'] = routing_mode
+        if not server:
+            # 如果没有当前服务器，创建一个临时配置
+            import uuid
+            server = {
+                'id': str(uuid.uuid4()),
+                'name': '临时配置',
+            }
+        
+        # 创建副本并更新为界面当前值
+        server = server.copy()
+        server['server'] = self.server_edit.text()
+        server['listen'] = self.listen_edit.text()
+        server['token'] = self.token_edit.text()
+        server['ip'] = self.ip_edit.text()
+        server['dns'] = self.dns_edit.text()
+        server['ech'] = self.ech_edit.text()
+        # 保存分流模式
+        routing_mode = self.routing_combo.currentData()
+        if routing_mode:
+            server['routing_mode'] = routing_mode
+        else:
+            # 如果没有选择，使用默认值
+            server['routing_mode'] = server.get('routing_mode', 'bypass_cn')
         return server
     
     def on_server_changed(self):
@@ -895,11 +906,30 @@ class MainWindow(QMainWindow):
         if index >= 0:
             server_id = self.server_combo.itemData(index)
             if server_id and server_id != self.config_manager.current_server_id:
+                # 先保存当前编辑框的值到当前服务器（如果有的话）
+                current_server = self.config_manager.get_current_server()
+                if current_server:
+                    # 将当前编辑框的值保存到当前服务器
+                    current_server['server'] = self.server_edit.text()
+                    current_server['listen'] = self.listen_edit.text()
+                    current_server['token'] = self.token_edit.text()
+                    current_server['ip'] = self.ip_edit.text()
+                    current_server['dns'] = self.dns_edit.text()
+                    current_server['ech'] = self.ech_edit.text()
+                    # 保存分流模式
+                    routing_mode = self.routing_combo.currentData()
+                    if routing_mode:
+                        current_server['routing_mode'] = routing_mode
+                    self.config_manager.update_server(current_server)
+                
+                # 切换到新服务器
                 self.config_manager.current_server_id = server_id
                 # 暂时断开信号，避免递归
                 self.server_combo.currentIndexChanged.disconnect()
+                # 加载新服务器的配置到界面
                 self.load_server_config()
                 self.server_combo.currentIndexChanged.connect(self.on_server_changed)
+                # 保存配置
                 self.config_manager.save_config()
     
     def add_server(self):
